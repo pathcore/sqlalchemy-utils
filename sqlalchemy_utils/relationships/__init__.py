@@ -60,6 +60,10 @@ def relationship_to_correlation(relationship, alias):
 def chained_inverse_join(relationships, leaf_model):
     selectable = sa.inspect(leaf_model).selectable
     aliases = [leaf_model]
+
+    if relationships[-1].property._is_self_referential:
+        aliases.append(sa.orm.aliased(relationships[-1].mapper.class_))
+
     for index, relationship in enumerate(relationships[1:]):
         aliases.append(sa.orm.aliased(relationship.mapper.class_))
         selectable = inverse_join(
