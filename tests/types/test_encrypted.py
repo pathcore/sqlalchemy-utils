@@ -1,9 +1,12 @@
+import random
+import string
 from datetime import date, datetime, time
 
 import pytest
 import sqlalchemy as sa
 
-from sqlalchemy_utils import ColorType, EncryptedType, PhoneNumberType
+from sqlalchemy_utils import ColorType, PhoneNumberType, StringEncryptedType
+from sqlalchemy_utils.types import JSONType
 from sqlalchemy_utils.types.encrypted.encrypted_type import (
     AesEngine,
     AesGcmEngine,
@@ -25,71 +28,78 @@ def User(Base, encryption_engine, test_key, padding_mechanism):
         __tablename__ = 'user'
         id = sa.Column(sa.Integer, primary_key=True)
 
-        username = sa.Column(EncryptedType(
+        username = sa.Column(StringEncryptedType(
             sa.Unicode,
             test_key,
             encryption_engine,
             padding_mechanism)
         )
 
-        access_token = sa.Column(EncryptedType(
+        access_token = sa.Column(StringEncryptedType(
             sa.String,
             test_key,
             encryption_engine,
             padding_mechanism)
         )
 
-        is_active = sa.Column(EncryptedType(
+        is_active = sa.Column(StringEncryptedType(
             sa.Boolean,
             test_key,
             encryption_engine,
             padding_mechanism)
         )
 
-        accounts_num = sa.Column(EncryptedType(
+        accounts_num = sa.Column(StringEncryptedType(
             sa.Integer,
             test_key,
             encryption_engine,
             padding_mechanism)
         )
 
-        phone = sa.Column(EncryptedType(
+        phone = sa.Column(StringEncryptedType(
             PhoneNumberType,
             test_key,
             encryption_engine,
             padding_mechanism)
         )
 
-        color = sa.Column(EncryptedType(
+        color = sa.Column(StringEncryptedType(
             ColorType,
             test_key,
             encryption_engine,
             padding_mechanism)
         )
 
-        date = sa.Column(EncryptedType(
+        date = sa.Column(StringEncryptedType(
             sa.Date,
             test_key,
             encryption_engine,
             padding_mechanism)
         )
 
-        time = sa.Column(EncryptedType(
+        time = sa.Column(StringEncryptedType(
             sa.Time,
             test_key,
             encryption_engine,
             padding_mechanism)
         )
 
-        datetime = sa.Column(EncryptedType(
+        datetime = sa.Column(StringEncryptedType(
             sa.DateTime,
             test_key,
             encryption_engine,
             padding_mechanism)
         )
 
-        enum = sa.Column(EncryptedType(
+        enum = sa.Column(StringEncryptedType(
             sa.Enum('One', name='user_enum_t'),
+            test_key,
+            encryption_engine,
+            padding_mechanism)
+        )
+
+        json = sa.Column(StringEncryptedType(
+            JSONType,
             test_key,
             encryption_engine,
             padding_mechanism)
@@ -124,6 +134,11 @@ def user_enum():
 
 
 @pytest.fixture
+def user_json():
+    return {"key": "value"}
+
+
+@pytest.fixture
 def user_date():
     return date(2010, 10, 2)
 
@@ -140,11 +155,9 @@ def user_datetime():
 
 @pytest.fixture
 def test_token():
-    import string
-    import random
     token = ''
     characters = string.ascii_letters + string.digits
-    for i in range(60):
+    for _ in range(60):
         token += ''.join(random.choice(characters))
     return token
 
@@ -170,6 +183,7 @@ def user(
     user_date,
     user_time,
     user_enum,
+    user_json,
     user_datetime,
     test_token,
     active,
@@ -183,6 +197,7 @@ def user(
     user.date = user_date
     user.time = user_time
     user.enum = user_enum
+    user.json = user_json
     user.datetime = user_datetime
     user.access_token = test_token
     user.is_active = active
@@ -236,7 +251,7 @@ class EncryptedTypeTestCase(object):
             __tablename__ = 'team'
             id = sa.Column(sa.Integer, primary_key=True)
             key = sa.Column(sa.String(50))
-            name = sa.Column(EncryptedType(
+            name = sa.Column(StringEncryptedType(
                 sa.Unicode,
                 lambda: self._team_key,
                 encryption_engine,
@@ -277,6 +292,9 @@ class EncryptedTypeTestCase(object):
 
     def test_enum(self, user, user_enum):
         assert user.enum == user_enum
+
+    def test_json(self, user, user_json):
+        assert user.json == user_json
 
     def test_lookup_key(self, session, Team):
         # Add teams
@@ -320,7 +338,6 @@ class EncryptedTypeTestCase(object):
 
 
 class AesEncryptedTypeTestCase(EncryptedTypeTestCase):
-
     @pytest.fixture
     def encryption_engine(self):
         return AesEngine
@@ -334,28 +351,24 @@ class AesEncryptedTypeTestCase(EncryptedTypeTestCase):
 
 
 class TestAesEncryptedTypeWithPKCS5Padding(AesEncryptedTypeTestCase):
-
     @pytest.fixture
     def padding_mechanism(self):
         return 'pkcs5'
 
 
 class TestAesEncryptedTypeWithOneAndZeroesPadding(AesEncryptedTypeTestCase):
-
     @pytest.fixture
     def padding_mechanism(self):
         return 'oneandzeroes'
 
 
 class TestAesEncryptedTypeWithZeroesPadding(AesEncryptedTypeTestCase):
-
     @pytest.fixture
     def padding_mechanism(self):
         return 'zeroes'
 
 
 class TestAesEncryptedTypeTestcaseWithNaivePadding(AesEncryptedTypeTestCase):
-
     @pytest.fixture
     def padding_mechanism(self):
         return 'naive'
@@ -372,7 +385,6 @@ class TestAesEncryptedTypeTestcaseWithNaivePadding(AesEncryptedTypeTestCase):
 
 
 class TestFernetEncryptedTypeTestCase(EncryptedTypeTestCase):
-
     @pytest.fixture
     def encryption_engine(self):
         return FernetEngine
@@ -382,8 +394,7 @@ class TestFernetEncryptedTypeTestCase(EncryptedTypeTestCase):
         return None
 
 
-class TestDatetimeHandler(object):
-
+class TestDatetimeHandler:
     def test_datetime_with_micro_and_timezone(
         self, datetime_with_micro_and_timezone
     ):
@@ -456,11 +467,13 @@ class TestAesGcmEngine(object):
         self.engine._initialize_engine(TestAesGcmEngine.KEY)
 
     def test_roundtrip(self):
-        for l in range(0, 36):
-            plaintext = '0123456789abcdefghijklmnopqrstuvwxyz'[:l]
+        for number in range(0, 36):
+            plaintext = '0123456789abcdefghijklmnopqrstuvwxyz'[:number]
             encrypted = self.engine.encrypt(plaintext)
             decrypted = self.engine.decrypt(encrypted)
-            assert plaintext == decrypted, "Round-trip failed for len: %d" % l
+            assert plaintext == decrypted, (
+                "Round-trip failed for len: %d" % number
+            )
 
     def test_modified_iv_fails_to_decrypt(self):
         plaintext = 'abcdefgh'
@@ -468,7 +481,7 @@ class TestAesGcmEngine(object):
         # 3rd char will be IV. Modify it
         POS = 3
         encrypted = encrypted[:POS] + \
-            (b'A' if encrypted[POS] != b'A' else b'B') + \
+            ('A' if encrypted[POS] != 'A' else 'B') + \
             encrypted[POS + 1:]
         with pytest.raises(InvalidCiphertextError):
             self.engine.decrypt(encrypted)
@@ -479,7 +492,7 @@ class TestAesGcmEngine(object):
         # 19th char will be tag. Modify it
         POS = 19
         encrypted = encrypted[:POS] + \
-            (b'A' if encrypted[POS] != b'A' else b'B') + \
+            ('A' if encrypted[POS] != 'A' else 'B') + \
             encrypted[POS + 1:]
         with pytest.raises(InvalidCiphertextError):
             self.engine.decrypt(encrypted)
@@ -490,7 +503,7 @@ class TestAesGcmEngine(object):
         # 43rd char will be ciphertext. Modify it
         POS = 43
         encrypted = encrypted[:POS] + \
-            (b'A' if encrypted[POS] != b'A' else b'B') + \
+            ('A' if encrypted[POS] != 'A' else 'B') + \
             encrypted[POS + 1:]
         with pytest.raises(InvalidCiphertextError):
             self.engine.decrypt(encrypted)
@@ -513,7 +526,6 @@ class TestAesGcmEngine(object):
 
 
 class TestAesGcmEncryptedType(EncryptedTypeTestCase):
-
     @pytest.fixture
     def encryption_engine(self):
         return AesGcmEngine

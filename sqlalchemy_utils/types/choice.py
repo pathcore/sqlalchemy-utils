@@ -1,13 +1,10 @@
+from enum import Enum
+
 import six
 from sqlalchemy import types
 
 from ..exceptions import ImproperlyConfigured
 from .scalar_coercible import ScalarCoercible
-
-try:
-    from enum import Enum
-except ImportError:
-    Enum = None
 
 
 class Choice(object):
@@ -29,6 +26,9 @@ class Choice(object):
     def __unicode__(self):
         return six.text_type(self.value)
 
+    def __str__(self):
+        return six.ensure_str(self.__unicode__())
+
     def __repr__(self):
         return 'Choice(code={code}, value={value})'.format(
             code=self.code,
@@ -36,7 +36,7 @@ class Choice(object):
         )
 
 
-class ChoiceType(types.TypeDecorator, ScalarCoercible):
+class ChoiceType(ScalarCoercible, types.TypeDecorator):
     """
     ChoiceType offers way of having fixed set of choices for given column. It
     could work with a list of tuple (a collection of key-value pairs), or
@@ -65,7 +65,7 @@ class ChoiceType(types.TypeDecorator, ScalarCoercible):
 
 
         user = User(type=u'admin')
-        user.type  # Choice(type='admin', value=u'Admin')
+        user.type  # Choice(code='admin', value=u'Admin')
 
     Or::
 
@@ -109,7 +109,7 @@ class ChoiceType(types.TypeDecorator, ScalarCoercible):
 
 
         user = User(type=u'admin')
-        user.type  # Choice(type='admin', value=u'Admin')
+        user.type  # Choice(code='admin', value=u'Admin')
 
         print user.type  # u'Admin'
 
@@ -144,7 +144,7 @@ class ChoiceType(types.TypeDecorator, ScalarCoercible):
     impl = types.Unicode(255)
 
     def __init__(self, choices, impl=None):
-        self.choices = choices
+        self.choices = tuple(choices)
 
         if (
             Enum is not None and

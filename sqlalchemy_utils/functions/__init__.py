@@ -1,5 +1,4 @@
 from .database import (  # noqa
-    analyze,
     create_database,
     database_exists,
     drop_database,
@@ -7,7 +6,8 @@ from .database import (  # noqa
     has_index,
     has_unique_index,
     is_auto_assigned_date_column,
-    json_sql
+    json_sql,
+    jsonb_sql
 )
 from .foreign_keys import (  # noqa
     dependent_objects,
@@ -28,7 +28,6 @@ from .orm import (  # noqa
     get_hybrid_properties,
     get_mapper,
     get_primary_keys,
-    get_query_entities,
     get_tables,
     get_type,
     getdotattr,
@@ -40,8 +39,4 @@ from .orm import (  # noqa
     table_name
 )
 from .render import render_expression, render_statement  # noqa
-from .sort_query import (  # noqa
-    make_order_by_deterministic,
-    QuerySorterException,
-    sort_query
-)
+from .sort_query import make_order_by_deterministic  # noqa

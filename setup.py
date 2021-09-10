@@ -4,14 +4,12 @@ SQLAlchemy-Utils
 
 Various utility functions and custom data types for SQLAlchemy.
 """
-from setuptools import setup, find_packages
 import os
 import re
-import sys
 
+from setuptools import find_packages, setup
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PY3 = sys.version_info[0] == 3
 
 
 def get_version():
@@ -31,9 +29,11 @@ extras_require = {
         'flexmock>=0.9.7',
         'mock==2.0.0',
         'psycopg2>=2.5.1',
+        'psycopg2cffi>=2.8.1',
         'pg8000>=1.12.4',
         'pytz>=2014.2',
         'python-dateutil>=2.6',
+        'backports.zoneinfo;python_version<"3.9"',
         'pymysql',
         'flake8>=2.4.0',
         'isort>=4.2.2',
@@ -42,12 +42,11 @@ extras_require = {
     'anyjson': ['anyjson>=0.3.3'],
     'babel': ['Babel>=1.3'],
     'arrow': ['arrow>=0.3.4'],
+    'pendulum': ['pendulum>=2.0.5'],
     'intervals': ['intervals>=0.7.1'],
     'phone': ['phonenumbers>=5.9.2'],
     'password': ['passlib >= 1.6, < 2.0'],
     'color': ['colour>=0.0.4'],
-    'ipaddress': ['ipaddr'] if not PY3 else [],
-    'enum': ['enum34'] if sys.version_info < (3, 4) else [],
     'timezone': ['python-dateutil'],
     'url': ['furl >= 0.4.1'],
     'encrypted': ['cryptography>=0.6']
@@ -56,9 +55,9 @@ extras_require = {
 
 # Add all optional dependencies to testing requirements.
 test_all = []
-for name, requirements in sorted(extras_require.items()):
+for requirements in extras_require.values():
     test_all += requirements
-extras_require['test_all'] = test_all
+extras_require['test_all'] = sorted(test_all)
 
 
 setup(
@@ -81,18 +80,20 @@ setup(
         'SQLAlchemy>=1.0'
     ],
     extras_require=extras_require,
+    python_requires='~=3.4',
     classifiers=[
         'Environment :: Web Environment',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: BSD License',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
         'Topic :: Software Development :: Libraries :: Python Modules'
     ]

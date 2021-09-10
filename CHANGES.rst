@@ -4,6 +4,138 @@ Changelog
 Here you can see the full list of changes between each SQLAlchemy-Utils release.
 
 
+0.37.8 (2021-06-28)
+^^^^^^^^^^^^^^^^^^^
+
+- Added 'zoneinfo' backend to TimezoneType (#510, pull request courtesy of huonw)
+
+
+0.37.7 (2021-06-15)
+^^^^^^^^^^^^^^^^^^^
+
+- Added identifier quoting for view functions and constructs
+- Added literal processor for UUIDType
+
+
+0.37.6 (2021-06-02)
+^^^^^^^^^^^^^^^^^^^
+
+- Added `cache_ok=True` for TSVectorType
+
+
+0.37.5 (2021-05-31)
+^^^^^^^^^^^^^^^^^^^
+
+- Fixed instant_defaults_listener to respect constructor supplied kwargs (#516, pull request courtesy of soundstripe)
+
+
+0.37.4 (2021-05-21)
+^^^^^^^^^^^^^^^^^^^
+
+- Fixed incorrect Ltree.lca behaviour (#468, pull request courtesy of slymit)
+
+
+0.37.3 (2021-05-16)
+^^^^^^^^^^^^^^^^^^^
+
+- Added `cache_ok=True` for all custom types
+- Added CockroachDB support for UUIDType (#526, pull request courtesy of chrishemmings)
+
+
+0.37.2 (2021-05-05)
+^^^^^^^^^^^^^^^^^^^
+
+- Added python_requires to setup.py
+
+
+0.37.1 (2021-05-03)
+^^^^^^^^^^^^^^^^^^^
+
+- Removed py27 from pypi wheel
+
+
+0.37.0 (2021-04-12)
+^^^^^^^^^^^^^^^^^^^
+
+- Added SQLAlchemy 1.4 support
+- Fixed database_exists() on PostgreSQL (#462)
+- Added create_database support pymssql (#486)
+- Removed `sort_query`, `get_query_entities` and `get_query_entity_by_alias` functions
+
+
+0.36.8 (2020-07-08)
+^^^^^^^^^^^^^^^^^^^
+
+- Don't connect to 'postgres' data base for database existence check (#372, pull request courtesy of bernt-matthias)
+
+
+0.36.7 (2020-07-02)
+^^^^^^^^^^^^^^^^^^^
+
+- Fix dynamic relationships for observables (#455)
+
+
+0.36.6 (2020-05-24)
+^^^^^^^^^^^^^^^^^^^
+
+- Reverted #426 and added support for Legacy Encrypted Type (#450, pull request courtesy of rushilsrivastava)
+- Added psycopg2cffi support for create_database and drop_database (#447, pull request courtesy of DominicBurkart)
+
+
+0.36.5 (2020-05-03)
+^^^^^^^^^^^^^^^^^^^
+
+- Added support for dictionary input in CompositeType (#435, pull request courtesy of cozos)
+- Added new EnrichedDateTime and EnrichedDate types (#403, pull request courtesy of yk-lab)
+- Using String instead of LargeBinary for impl of EncryptedType (#426, pull request courtesy of aicioara)
+- Added support for JSONType in EncryptedType (#439, pull request courtesy of rushilsrivastava)
+
+
+0.36.4 (2020-04-30)
+^^^^^^^^^^^^^^^^^^^
+
+- Added jsonb_sql function (#377, pull request courtesy of getglad)
+- Drop py27 support
+
+
+0.36.3 (2020-03-18)
+^^^^^^^^^^^^^^^^^^^
+
+- Added hash method for PhoneNumberType (#428, pull request courtesy of hanc1208)
+
+
+0.36.2 (2020-03-16)
+^^^^^^^^^^^^^^^^^^^
+
+- Added repr for UUIDType (#424, pull request courtesy of ziima)
+
+
+0.36.1 (2019-12-23)
+^^^^^^^^^^^^^^^^^^^
+
+- Added support for CASCADE option when dropping views (#406, pull request courtesy of amicks)
+- Added `aliases` parameter to create_materialized_view function.
+
+
+0.36.0 (2019-12-08)
+^^^^^^^^^^^^^^^^^^^
+
+- Removed explain and explain_analyze due to the internal changes in SQLAlchemy version 1.3.
+
+
+0.35.0 (2019-11-01)
+^^^^^^^^^^^^^^^^^^^
+
+- Removed some deprecation warnings
+- Added Int8RangeType (#401, pull request courtesy of lpsinger)
+
+
+0.34.2 (2019-08-20)
+^^^^^^^^^^^^^^^^^^^
+
+- Remove ABC deprecation warnings (#386, pull request courtesy of VizualAbstract)
+
+
 0.34.1 (2019-07-15)
 ^^^^^^^^^^^^^^^^^^^
 

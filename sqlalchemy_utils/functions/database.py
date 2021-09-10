@@ -1,99 +1,14 @@
-try:
-    from collections.abc import Mapping, Sequence
-except ImportError:  # For python 2.7 support
-    from collections import Mapping, Sequence
 import itertools
 import os
+from collections.abc import Mapping, Sequence
 from copy import copy
 
 import sqlalchemy as sa
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
-from ..expressions import explain_analyze
 from ..utils import starts_with
 from .orm import quote
-
-
-class PlanAnalysis(object):
-    def __init__(self, plan):
-        self.plan = plan
-
-    @property
-    def node_types(self):
-        types = [self.plan['Node Type']]
-        if 'Plans' in self.plan:
-            for plan in self.plan['Plans']:
-                analysis = PlanAnalysis(plan)
-                types.extend(analysis.node_types)
-        return types
-
-
-class QueryAnalysis(object):
-    def __init__(self, result_set):
-        self.plan = result_set[0]['Plan']
-        if 'Total Runtime' in result_set[0]:
-            # PostgreSQL versions < 9.4
-            self.runtime = result_set[0]['Total Runtime']
-        else:
-            # PostgreSQL versions >= 9.4
-            self.runtime = (
-                result_set[0]['Execution Time'] +
-                result_set[0]['Planning Time']
-            )
-
-    @property
-    def node_types(self):
-        return list(PlanAnalysis(self.plan).node_types)
-
-    def __repr__(self):
-        return '<QueryAnalysis runtime=%r>' % self.runtime
-
-
-def analyze(conn, query):
-    """
-    Analyze query using given connection and return :class:`QueryAnalysis`
-    object. Analysis is performed using database specific EXPLAIN ANALYZE
-    construct and then examining the results into structured format. Currently
-    only PostgreSQL is supported.
-
-
-    Getting query runtime (in database level) ::
-
-
-        from sqlalchemy_utils import analyze
-
-
-        analysis = analyze(conn, 'SELECT * FROM article')
-        analysis.runtime  # runtime as milliseconds
-
-
-    Analyze can be very useful when testing that query doesn't issue a
-    sequential scan (scanning all rows in table). You can for example write
-    simple performance tests this way.::
-
-
-        query = (
-            session.query(Article.name)
-            .order_by(Article.name)
-            .limit(10)
-        )
-        analysis = analyze(self.connection, query)
-        analysis.node_types  # [u'Limit', u'Index Only Scan']
-
-        assert 'Seq Scan' not in analysis.node_types
-
-
-    .. versionadded: 0.26.17
-
-    :param conn: SQLAlchemy Connection object
-    :param query: SQLAlchemy Query object or query as a string
-    """
-    return QueryAnalysis(
-        conn.execute(
-            explain_analyze(query, buffers=True, format='json')
-        ).scalar()
-    )
 
 
 def escape_like(string, escape_char='*'):
@@ -183,6 +98,78 @@ def json_sql(value, scalars_to_json=True):
         return sa.func.json_build_array(
             *(
                 json_sql(v, scalars_to_json=False)
+                for v in value
+            )
+        )
+    elif isinstance(value, (int, float)):
+        return scalar_convert(str(value))
+    return value
+
+
+def jsonb_sql(value, scalars_to_jsonb=True):
+    """
+    Convert python data structures to PostgreSQL specific SQLAlchemy JSONB
+    constructs. This function is extremly useful if you need to build
+    PostgreSQL JSONB on python side.
+
+    .. note::
+
+        This function needs PostgreSQL >= 9.4
+
+    Scalars are converted to to_jsonb SQLAlchemy function objects
+
+    ::
+
+        jsonb_sql(1)     # Equals SQL: to_jsonb(1)
+
+        jsonb_sql('a')   # to_jsonb('a')
+
+
+    Mappings are converted to jsonb_build_object constructs
+
+    ::
+
+        jsonb_sql({'a': 'c', '2': 5})  # jsonb_build_object('a', 'c', '2', 5)
+
+
+    Sequences (other than strings) converted to jsonb_build_array constructs
+
+    ::
+
+        jsonb_sql([1, 2, 3])  # jsonb_build_array(1, 2, 3)
+
+
+    You can also nest these data structures
+
+    ::
+
+        jsonb_sql({'a': [1, 2, 3]})
+        # jsonb_build_object('a', jsonb_build_array[1, 2, 3])
+
+
+    :param value:
+        value to be converted to SQLAlchemy PostgreSQL function constructs
+    :boolean jsonbb:
+        Flag to alternatively convert the return with a to_jsonb construct
+    """
+    scalar_convert = sa.text
+    if scalars_to_jsonb:
+        def scalar_convert(a):
+            return sa.func.to_jsonb(sa.text(a))
+
+    if isinstance(value, Mapping):
+        return sa.func.jsonb_build_object(
+            *(
+                jsonb_sql(v, scalars_to_jsonb=False)
+                for v in itertools.chain(*value.items())
+            )
+        )
+    elif isinstance(value, str):
+        return scalar_convert("'{0}'".format(value))
+    elif isinstance(value, Sequence):
+        return sa.func.jsonb_build_array(
+            *(
+                jsonb_sql(v, scalars_to_jsonb=False)
                 for v in value
             )
         )
@@ -433,6 +420,45 @@ def is_auto_assigned_date_column(column):
     )
 
 
+def _set_url_database(url: sa.engine.url.URL, database):
+    """Set the database of an engine URL.
+
+    :param url: A SQLAlchemy engine URL.
+    :param database: New database to set.
+
+    """
+    if hasattr(sa.engine, 'URL'):
+        ret = sa.engine.URL.create(
+            drivername=url.drivername,
+            username=url.username,
+            password=url.password,
+            host=url.host,
+            port=url.port,
+            database=database,
+            query=url.query
+        )
+    else:  # SQLAlchemy <1.4
+        url.database = database
+        ret = url
+    assert ret.database == database, ret
+    return ret
+
+
+def _get_scalar_result(engine, sql):
+    with engine.connect() as conn:
+        return conn.scalar(sql)
+
+
+def _sqlite_file_exists(database):
+    if not os.path.isfile(database) or os.path.getsize(database) < 100:
+        return False
+
+    with open(database, 'rb') as f:
+        header = f.read(100)
+
+    return header[:16] == b'SQLite format 3\x00'
+
+
 def database_exists(url):
     """Check if a database exists.
 
@@ -454,64 +480,48 @@ def database_exists(url):
 
     """
 
-    def get_scalar_result(engine, sql):
-        result_proxy = engine.execute(sql)
-        result = result_proxy.scalar()
-        result_proxy.close()
-        engine.dispose()
-        return result
-
-    def sqlite_file_exists(database):
-        if not os.path.isfile(database) or os.path.getsize(database) < 100:
-            return False
-
-        with open(database, 'rb') as f:
-            header = f.read(100)
-
-        return header[:16] == b'SQLite format 3\x00'
-
     url = copy(make_url(url))
     database = url.database
-    if url.drivername.startswith('postgres'):
-        url.database = 'postgres'
-    else:
-        url.database = None
-
-    engine = sa.create_engine(url)
-
-    if engine.dialect.name == 'postgresql':
-        text = "SELECT 1 FROM pg_database WHERE datname='%s'" % database
-        return bool(get_scalar_result(engine, text))
-
-    elif engine.dialect.name == 'mysql':
-        text = ("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA "
-                "WHERE SCHEMA_NAME = '%s'" % database)
-        return bool(get_scalar_result(engine, text))
-
-    elif engine.dialect.name == 'sqlite':
-        if database:
-            return database == ':memory:' or sqlite_file_exists(database)
-        else:
-            # The default SQLAlchemy database is in memory,
-            # and :memory is not required, thus we should support that use-case
-            return True
-
-    else:
-        engine.dispose()
-        engine = None
-        text = 'SELECT 1'
-        try:
-            url.database = database
-            engine = sa.create_engine(url)
-            result = engine.execute(text)
-            result.close()
-            return True
-
-        except (ProgrammingError, OperationalError):
+    dialect_name = url.get_dialect().name
+    engine = None
+    try:
+        if dialect_name == 'postgresql':
+            text = "SELECT 1 FROM pg_database WHERE datname='%s'" % database
+            for db in (database, 'postgres', 'template1', 'template0', None):
+                url = _set_url_database(url, database=db)
+                engine = sa.create_engine(url)
+                try:
+                    return bool(_get_scalar_result(engine, text))
+                except (ProgrammingError, OperationalError):
+                    pass
             return False
-        finally:
-            if engine is not None:
-                engine.dispose()
+
+        elif dialect_name == 'mysql':
+            url = _set_url_database(url, database=None)
+            engine = sa.create_engine(url)
+            text = ("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA "
+                    "WHERE SCHEMA_NAME = '%s'" % database)
+            return bool(_get_scalar_result(engine, text))
+
+        elif dialect_name == 'sqlite':
+            url = _set_url_database(url, database=None)
+            engine = sa.create_engine(url)
+            if database:
+                return database == ':memory:' or _sqlite_file_exists(database)
+            else:
+                # The default SQLAlchemy database is in memory, and :memory is
+                # not required, thus we should support that use case.
+                return True
+        else:
+            text = 'SELECT 1'
+            try:
+                engine = sa.create_engine(url)
+                return bool(_get_scalar_result(engine, text))
+            except (ProgrammingError, OperationalError):
+                return False
+    finally:
+        if engine:
+            engine.dispose()
 
 
 def create_database(url, encoding='utf8', template=None):
@@ -537,31 +547,25 @@ def create_database(url, encoding='utf8', template=None):
     """
 
     url = copy(make_url(url))
-
     database = url.database
+    dialect_name = url.get_dialect().name
+    dialect_driver = url.get_dialect().driver
 
-    if url.drivername.startswith('postgres'):
-        url.database = 'postgres'
-    elif url.drivername.startswith('mssql'):
-        url.database = 'master'
-    elif not url.drivername.startswith('sqlite'):
-        url.database = None
+    if dialect_name == 'postgresql':
+        url = _set_url_database(url, database="postgres")
+    elif dialect_name == 'mssql':
+        url = _set_url_database(url, database="master")
+    elif not dialect_name == 'sqlite':
+        url = _set_url_database(url, database=None)
 
-    if url.drivername == 'mssql+pyodbc':
-        engine = sa.create_engine(url, connect_args={'autocommit': True})
-    elif url.drivername == 'postgresql+pg8000':
+    if (dialect_name == 'mssql' and dialect_driver in {'pymssql', 'pyodbc'}) \
+            or (dialect_name == 'postgresql' and dialect_driver in {
+            'asyncpg', 'pg8000', 'psycopg2', 'psycopg2cffi'}):
         engine = sa.create_engine(url, isolation_level='AUTOCOMMIT')
     else:
         engine = sa.create_engine(url)
-    result_proxy = None
 
-    if engine.dialect.name == 'postgresql':
-        if engine.driver == 'psycopg2':
-            from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-            engine.raw_connection().set_isolation_level(
-                ISOLATION_LEVEL_AUTOCOMMIT
-            )
-
+    if dialect_name == 'postgresql':
         if not template:
             template = 'template1'
 
@@ -570,26 +574,29 @@ def create_database(url, encoding='utf8', template=None):
             encoding,
             quote(engine, template)
         )
-        result_proxy = engine.execute(text)
 
-    elif engine.dialect.name == 'mysql':
+        with engine.connect() as connection:
+            connection.execute(text)
+
+    elif dialect_name == 'mysql':
         text = "CREATE DATABASE {0} CHARACTER SET = '{1}'".format(
             quote(engine, database),
             encoding
         )
-        result_proxy = engine.execute(text)
+        with engine.connect() as connection:
+            connection.execute(text)
 
-    elif engine.dialect.name == 'sqlite' and database != ':memory:':
+    elif dialect_name == 'sqlite' and database != ':memory:':
         if database:
-            engine.execute("CREATE TABLE DB(id int);")
-            engine.execute("DROP TABLE DB;")
+            with engine.connect() as connection:
+                connection.execute("CREATE TABLE DB(id int);")
+                connection.execute("DROP TABLE DB;")
 
     else:
         text = 'CREATE DATABASE {0}'.format(quote(engine, database))
-        result_proxy = engine.execute(text)
+        with engine.connect() as connection:
+            connection.execute(text)
 
-    if result_proxy is not None:
-        result_proxy.close()
     engine.dispose()
 
 
@@ -607,55 +614,49 @@ def drop_database(url):
     """
 
     url = copy(make_url(url))
-
     database = url.database
+    dialect_name = url.get_dialect().name
+    dialect_driver = url.get_dialect().driver
 
-    if url.drivername.startswith('postgres'):
-        url.database = 'postgres'
-    elif url.drivername.startswith('mssql'):
-        url.database = 'master'
-    elif not url.drivername.startswith('sqlite'):
-        url.database = None
+    if dialect_name == 'postgresql':
+        url = _set_url_database(url, database="postgres")
+    elif dialect_name == 'mssql':
+        url = _set_url_database(url, database="master")
+    elif not dialect_name == 'sqlite':
+        url = _set_url_database(url, database=None)
 
-    if url.drivername == 'mssql+pyodbc':
+    if dialect_name == 'mssql' and dialect_driver in {'pymssql', 'pyodbc'}:
         engine = sa.create_engine(url, connect_args={'autocommit': True})
-    elif url.drivername == 'postgresql+pg8000':
+    elif dialect_name == 'postgresql' and dialect_driver in {
+            'asyncpg', 'pg8000', 'psycopg2', 'psycopg2cffi'}:
         engine = sa.create_engine(url, isolation_level='AUTOCOMMIT')
     else:
         engine = sa.create_engine(url)
-    conn_resource = None
 
-    if engine.dialect.name == 'sqlite' and database != ':memory:':
+    if dialect_name == 'sqlite' and database != ':memory:':
         if database:
             os.remove(database)
+    elif dialect_name == 'postgresql':
+        with engine.connect() as connection:
+            # Disconnect all users from the database we are dropping.
+            version = connection.dialect.server_version_info
+            pid_column = (
+                'pid' if (version >= (9, 2)) else 'procpid'
+            )
+            text = '''
+            SELECT pg_terminate_backend(pg_stat_activity.%(pid_column)s)
+            FROM pg_stat_activity
+            WHERE pg_stat_activity.datname = '%(database)s'
+            AND %(pid_column)s <> pg_backend_pid();
+            ''' % {'pid_column': pid_column, 'database': database}
+            connection.execute(text)
 
-    elif engine.dialect.name == 'postgresql' and engine.driver == 'psycopg2':
-        from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-
-        connection = engine.connect()
-        connection.connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-
-        # Disconnect all users from the database we are dropping.
-        version = connection.dialect.server_version_info
-        pid_column = (
-            'pid' if (version >= (9, 2)) else 'procpid'
-        )
-        text = '''
-        SELECT pg_terminate_backend(pg_stat_activity.%(pid_column)s)
-        FROM pg_stat_activity
-        WHERE pg_stat_activity.datname = '%(database)s'
-          AND %(pid_column)s <> pg_backend_pid();
-        ''' % {'pid_column': pid_column, 'database': database}
-        connection.execute(text)
-
-        # Drop the database.
-        text = 'DROP DATABASE {0}'.format(quote(connection, database))
-        connection.execute(text)
-        conn_resource = connection
+            # Drop the database.
+            text = 'DROP DATABASE {0}'.format(quote(connection, database))
+            connection.execute(text)
     else:
         text = 'DROP DATABASE {0}'.format(quote(engine, database))
-        conn_resource = engine.execute(text)
+        with engine.connect() as connection:
+            connection.execute(text)
 
-    if conn_resource is not None:
-        conn_resource.close()
     engine.dispose()

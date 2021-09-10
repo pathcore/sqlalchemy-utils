@@ -9,7 +9,6 @@ from .asserts import (  # noqa
 from .exceptions import ImproperlyConfigured  # noqa
 from .expressions import Asterisk, row_to_json  # noqa
 from .functions import (  # noqa
-    analyze,
     cast_if,
     create_database,
     create_mock_engine,
@@ -26,7 +25,6 @@ from .functions import (  # noqa
     get_hybrid_properties,
     get_mapper,
     get_primary_keys,
-    get_query_entities,
     get_referencing_foreign_keys,
     get_tables,
     get_type,
@@ -37,12 +35,12 @@ from .functions import (  # noqa
     identity,
     is_loaded,
     json_sql,
+    jsonb_sql,
     merge_references,
     mock_engine,
     naturally_equivalent,
     render_expression,
     render_statement,
-    sort_query,
     table_name
 )
 from .generic import generic_relationship  # noqa
@@ -71,8 +69,11 @@ from .types import (  # noqa
     DateTimeRangeType,
     EmailType,
     EncryptedType,
+    EnrichedDateTimeType,
+    EnrichedDateType,
     instrumented_list,
     InstrumentedList,
+    Int8RangeType,
     IntRangeType,
     IPAddressType,
     JSONType,
@@ -88,6 +89,7 @@ from .types import (  # noqa
     remove_composite_listeners,
     ScalarListException,
     ScalarListType,
+    StringEncryptedType,
     TimezoneType,
     TSVectorType,
     URLType,
@@ -100,4 +102,4 @@ from .view import (  # noqa
     refresh_materialized_view
 )
 
-__version__ = '0.34.1'
+__version__ = '0.37.8'

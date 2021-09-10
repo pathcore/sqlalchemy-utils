@@ -25,7 +25,6 @@ def init_models(Article):
 
 @pytest.mark.skipif('arrow.arrow is None')
 class TestArrowDateTimeType(object):
-
     def test_parameter_processing(self, session, Article):
         article = Article(
             created_at=arrow.arrow.get(datetime(2000, 11, 1))
@@ -39,7 +38,7 @@ class TestArrowDateTimeType(object):
 
     def test_string_coercion(self, Article):
         article = Article(
-            created_at='1367900664'
+            created_at='2013-01-01'
         )
         assert article.created_at.year == 2013
 
@@ -63,7 +62,7 @@ class TestArrowDateTimeType(object):
     def test_literal_param(self, session, Article):
         clause = Article.created_at > '2015-01-01'
         compiled = str(clause.compile(compile_kwargs={"literal_binds": True}))
-        assert compiled == 'article.created_at > 2015-01-01'
+        assert compiled == "article.created_at > '2015-01-01'"
 
     @pytest.mark.usefixtures('postgresql_dsn')
     def test_timezone(self, session, Article):
@@ -78,3 +77,8 @@ class TestArrowDateTimeType(object):
         item = session.query(Article).one()
         assert item.published_at.datetime == item.published_at_dt
         assert item.published_at.to(timezone) == dt
+
+    def test_compilation(self, Article, session):
+        query = sa.select([Article.created_at])
+        # the type should be cacheable and not throw exception
+        session.execute(query)

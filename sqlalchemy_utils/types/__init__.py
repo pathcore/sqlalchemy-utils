@@ -8,7 +8,11 @@ from .color import ColorType  # noqa
 from .country import CountryType  # noqa
 from .currency import CurrencyType  # noqa
 from .email import EmailType  # noqa
-from .encrypted.encrypted_type import EncryptedType  # noqa
+from .encrypted.encrypted_type import (  # noqa
+    EncryptedType,
+    StringEncryptedType
+)
+from .enriched_datetime.enriched_date_type import EnrichedDateType  # noqa
 from .ip_address import IPAddressType  # noqa
 from .json import JSONType  # noqa
 from .locale import LocaleType  # noqa
@@ -28,6 +32,7 @@ from .phone_number import (  # noqa
 from .range import (  # noqa
     DateRangeType,
     DateTimeRangeType,
+    Int8RangeType,
     IntRangeType,
     NumericRangeType
 )
@@ -37,6 +42,8 @@ from .ts_vector import TSVectorType  # noqa
 from .url import URLType  # noqa
 from .uuid import UUIDType  # noqa
 from .weekdays import WeekDaysType  # noqa
+
+from .enriched_datetime.enriched_datetime_type import EnrichedDateTimeType  # noqa isort:skip
 
 
 class InstrumentedList(_InstrumentedList):

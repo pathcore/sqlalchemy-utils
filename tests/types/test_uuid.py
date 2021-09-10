@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from sqlalchemy_utils import UUIDType
 
@@ -23,6 +24,15 @@ def init_models(User):
 
 
 class TestUUIDType(object):
+    def test_repr(self):
+        plain = UUIDType()
+        assert repr(plain) == 'UUIDType()'
+
+        text = UUIDType(binary=False)
+        assert repr(text) == 'UUIDType(binary=False)'
+
+        not_native = UUIDType(native=False)
+        assert repr(not_native) == 'UUIDType(native=False)'
 
     def test_commit(self, session, User):
         obj = User()
@@ -46,3 +56,17 @@ class TestUUIDType(object):
 
         assert isinstance(obj.id, uuid.UUID)
         assert obj.id.bytes == identifier
+
+    def test_compilation(self, User, session):
+        query = sa.select([User.id])
+        # the type should be cacheable and not throw exception
+        session.execute(query)
+
+    def test_literal_bind(self, User):
+        expr = (User.id == 'b4e794d6-5750-4844-958c-fa382649719d').compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={'literal_binds': True}
+        )
+        assert str(expr) == (
+            '''"user".id = \'b4e794d6-5750-4844-958c-fa382649719d\''''
+        )

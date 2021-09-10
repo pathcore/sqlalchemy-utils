@@ -27,6 +27,7 @@ pip-log.txt
 # Unit test / coverage reports
 .coverage
 .tox
+coverage.xml
 nosetests.xml
 
 # Translations
@@ -47,3 +48,15 @@ Session.vim
 
 # Sublime Text
 *.sublime-*
+
+# JetBrains
+.idea/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/

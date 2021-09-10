@@ -173,7 +173,8 @@ in the decorator.
 
 """
 import itertools
-from collections import defaultdict, Iterable, namedtuple
+from collections import defaultdict, namedtuple
+from collections.abc import Iterable
 
 import sqlalchemy as sa
 
@@ -260,6 +261,7 @@ class PropertyObserver(object):
                             )
 
     def gather_callback_args(self, obj, callbacks):
+        session = sa.orm.object_session(obj)
         for callback in callbacks:
             backref = callback.backref
 
@@ -268,11 +270,12 @@ class PropertyObserver(object):
                 if not isinstance(root_objs, Iterable):
                     root_objs = [root_objs]
 
-                for root_obj in root_objs:
-                    if root_obj:
-                        args = self.get_callback_args(root_obj, callback)
-                        if args:
-                            yield args
+                with session.no_autoflush:
+                    for root_obj in root_objs:
+                        if root_obj:
+                            args = self.get_callback_args(root_obj, callback)
+                            if args:
+                                yield args
 
     def get_callback_args(self, root_obj, callback):
         session = sa.orm.object_session(root_obj)

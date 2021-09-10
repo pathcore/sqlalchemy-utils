@@ -49,6 +49,22 @@ Usage
         )
 
 
+Creation
+~~~~~~~~
+When creating CompositeType, you can either pass in a tuple or a dictionary.
+
+::
+    account1 = Account()
+    account1.balance = ('USD', 15)
+
+    account2 = Account()
+    account2.balance = {'currency': 'USD', 'amount': 15}
+
+    session.add(account1)
+    session.add(account2)
+    session.commit()
+
+
 Accessing fields
 ^^^^^^^^^^^^^^^^
 
@@ -118,8 +134,8 @@ AsIs = None
 register_adapter = None
 try:
     import psycopg2
-    from psycopg2.extras import CompositeCaster
     from psycopg2.extensions import adapt, AsIs, register_adapter
+    from psycopg2.extras import CompositeCaster
 except ImportError:
     pass
 
@@ -207,16 +223,23 @@ class CompositeType(UserDefinedType, SchemaType):
         def process(value):
             if value is None:
                 return None
+
             processed_value = []
             for i, column in enumerate(self.columns):
+                current_value = (
+                    value.get(column.name)
+                    if isinstance(value, dict)
+                    else value[i]
+                )
+
                 if isinstance(column.type, TypeDecorator):
                     processed_value.append(
                         column.type.process_bind_param(
-                            value[i], dialect
+                            current_value, dialect
                         )
                     )
                 else:
-                    processed_value.append(value[i])
+                    processed_value.append(current_value)
             return self.type_cls(*processed_value)
         return process
 

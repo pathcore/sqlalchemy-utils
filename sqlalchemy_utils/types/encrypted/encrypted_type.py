@@ -1,28 +1,32 @@
 # -*- coding: utf-8 -*-
 import base64
 import datetime
+import json
 import os
+import warnings
 
 import six
 from sqlalchemy.types import LargeBinary, String, TypeDecorator
 
 from sqlalchemy_utils.exceptions import ImproperlyConfigured
 from sqlalchemy_utils.types.encrypted.padding import PADDING_MECHANISM
+from sqlalchemy_utils.types.json import JSONType
 from sqlalchemy_utils.types.scalar_coercible import ScalarCoercible
 
 cryptography = None
 try:
     import cryptography
+    from cryptography.exceptions import InvalidTag
+    from cryptography.fernet import Fernet
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.ciphers import (
-        Cipher, algorithms, modes
+        algorithms,
+        Cipher,
+        modes
     )
-    from cryptography.fernet import Fernet
-    from cryptography.exceptions import InvalidTag
 except ImportError:
     pass
-
 
 dateutil = None
 try:
@@ -36,7 +40,7 @@ class InvalidCiphertextError(Exception):
     pass
 
 
-class EncryptionDecryptionBaseEngine(object):
+class EncryptionDecryptionBaseEngine:
     """A base encryption and decryption engine.
 
     This class must be sub-classed in order to create
@@ -110,7 +114,7 @@ class AesEngine(EncryptionDecryptionBaseEngine):
         encryptor = self.cipher.encryptor()
         encrypted = encryptor.update(value) + encryptor.finalize()
         encrypted = base64.b64encode(encrypted)
-        return encrypted
+        return encrypted.decode('utf-8')
 
     def decrypt(self, value):
         if isinstance(value, six.text_type):
@@ -164,7 +168,7 @@ class AesGcmEngine(EncryptionDecryptionBaseEngine):
         encrypted = encryptor.update(value) + encryptor.finalize()
         assert len(encryptor.tag) == self.TAG_SIZE_BYTES
         encrypted = base64.b64encode(iv + encryptor.tag + encrypted)
-        return encrypted
+        return encrypted.decode('utf-8')
 
     def decrypt(self, value):
         if isinstance(value, six.text_type):
@@ -208,18 +212,18 @@ class FernetEngine(EncryptionDecryptionBaseEngine):
             value = str(value)
         value = value.encode()
         encrypted = self.fernet.encrypt(value)
-        return encrypted
+        return encrypted.decode('utf-8')
 
     def decrypt(self, value):
         if isinstance(value, six.text_type):
             value = str(value)
-        decrypted = self.fernet.decrypt(value)
+        decrypted = self.fernet.decrypt(value.encode())
         if not isinstance(decrypted, six.string_types):
             decrypted = decrypted.decode('utf-8')
         return decrypted
 
 
-class EncryptedType(TypeDecorator, ScalarCoercible):
+class StringEncryptedType(TypeDecorator, ScalarCoercible):
     """
     EncryptedType provides a way to encrypt and decrypt values,
     to and from databases, that their type is a basic SQLAlchemy type.
@@ -343,17 +347,23 @@ class EncryptedType(TypeDecorator, ScalarCoercible):
                 sa.Unicode, get_key))
 
     """
+    impl = String
+    cache_ok = True
 
-    impl = LargeBinary
-
-    def __init__(self, type_in=None, key=None,
-                 engine=None, padding=None, **kwargs):
+    def __init__(
+        self,
+        type_in=None,
+        key=None,
+        engine=None,
+        padding=None,
+        **kwargs
+    ):
         """Initialization."""
         if not cryptography:
             raise ImproperlyConfigured(
                 "'cryptography' is required to use EncryptedType"
             )
-        super(EncryptedType, self).__init__(**kwargs)
+        super(StringEncryptedType, self).__init__(**kwargs)
         # set the underlying type
         if type_in is None:
             type_in = String()
@@ -400,6 +410,9 @@ class EncryptedType(TypeDecorator, ScalarCoercible):
                 elif issubclass(type_, (datetime.date, datetime.time)):
                     value = value.isoformat()
 
+                elif issubclass(type_, JSONType):
+                    value = six.text_type(json.dumps(value))
+
             return self.engine.encrypt(value)
 
     def process_result_value(self, value, dialect):
@@ -428,6 +441,9 @@ class EncryptedType(TypeDecorator, ScalarCoercible):
                         decrypted_value, type_
                     )
 
+                elif issubclass(type_, JSONType):
+                    return json.loads(decrypted_value)
+
                 # Handle all others
                 return self.underlying_type.python_type(decrypted_value)
 
@@ -435,6 +451,30 @@ class EncryptedType(TypeDecorator, ScalarCoercible):
         if isinstance(self.underlying_type, ScalarCoercible):
             return self.underlying_type._coerce(value)
 
+        return value
+
+
+class EncryptedType(StringEncryptedType):
+    impl = LargeBinary
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "The 'EncryptedType' class will change implementation from "
+            "'LargeBinary' to 'String' in a future version. Use "
+            "'StringEncryptedType' to use the 'String' implementation.",
+            DeprecationWarning)
+        super().__init__(*args, **kwargs)
+
+    def process_bind_param(self, value, dialect):
+        value = super().process_bind_param(value=value, dialect=dialect)
+        if isinstance(value, str):
+            value = value.encode()
+        return value
+
+    def process_result_value(self, value, dialect):
+        if isinstance(value, bytes):
+            value = value.decode()
+            value = super().process_result_value(value=value, dialect=dialect)
         return value
 
 

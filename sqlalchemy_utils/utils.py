@@ -1,16 +1,11 @@
-import sys
-from collections import Iterable
+from collections.abc import Iterable
 
 import six
 
 
 def str_coercible(cls):
-    if sys.version_info[0] >= 3:  # Python 3
-        def __str__(self):
-            return self.__unicode__()
-    else:  # Python 2
-        def __str__(self):
-            return self.__unicode__().encode('utf8')
+    def __str__(self):
+        return self.__unicode__()
 
     cls.__str__ = __str__
     return cls

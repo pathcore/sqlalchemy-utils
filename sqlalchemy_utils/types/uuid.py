@@ -2,13 +2,13 @@ from __future__ import absolute_import
 
 import uuid
 
-from sqlalchemy import types
+from sqlalchemy import types, util
 from sqlalchemy.dialects import mssql, postgresql
 
 from .scalar_coercible import ScalarCoercible
 
 
-class UUIDType(types.TypeDecorator, ScalarCoercible):
+class UUIDType(ScalarCoercible, types.TypeDecorator):
     """
     Stores a UUID in the database natively when it can and falls back to
     a BINARY(16) or a CHAR(32) when it can't.
@@ -35,8 +35,11 @@ class UUIDType(types.TypeDecorator, ScalarCoercible):
         self.binary = binary
         self.native = native
 
+    def __repr__(self):
+        return util.generic_repr(self)
+
     def load_dialect_impl(self, dialect):
-        if dialect.name == 'postgresql' and self.native:
+        if self.native and dialect.name in ('postgresql', 'cockroachdb'):
             # Use the native UUID type.
             return dialect.type_descriptor(postgresql.UUID())
 
@@ -60,6 +63,9 @@ class UUIDType(types.TypeDecorator, ScalarCoercible):
 
         return value
 
+    def process_literal_param(self, value, dialect):
+        return "'{}'".format(value) if value else value
+
     def process_bind_param(self, value, dialect):
         if value is None:
             return value
@@ -67,7 +73,11 @@ class UUIDType(types.TypeDecorator, ScalarCoercible):
         if not isinstance(value, uuid.UUID):
             value = self._coerce(value)
 
-        if self.native and dialect.name in ('postgresql', 'mssql'):
+        if self.native and dialect.name in (
+            'postgresql',
+            'mssql',
+            'cockroachdb'
+        ):
             return str(value)
 
         return value.bytes if self.binary else value.hex
@@ -76,7 +86,11 @@ class UUIDType(types.TypeDecorator, ScalarCoercible):
         if value is None:
             return value
 
-        if self.native and dialect.name in ('postgresql', 'mssql'):
+        if self.native and dialect.name in (
+            'postgresql',
+            'mssql',
+            'cockroachdb'
+        ):
             if isinstance(value, uuid.UUID):
                 # Some drivers convert PostgreSQL's uuid values to
                 # Python's uuid.UUID objects by themselves

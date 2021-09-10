@@ -134,7 +134,7 @@ than 500.
 
 .. _intervals: https://github.com/kvesteri/intervals
 """
-from collections import Iterable
+from collections.abc import Iterable
 from datetime import timedelta
 
 import six
@@ -143,6 +143,7 @@ from sqlalchemy import types
 from sqlalchemy.dialects.postgresql import (
     DATERANGE,
     INT4RANGE,
+    INT8RANGE,
     NUMRANGE,
     TSRANGE
 )
@@ -261,7 +262,7 @@ for func in funcs:
     )
 
 
-class RangeType(types.TypeDecorator, ScalarCoercible):
+class RangeType(ScalarCoercible, types.TypeDecorator):
     comparator_factory = RangeComparator
 
     def __init__(self, *args, **kwargs):
@@ -357,6 +358,58 @@ class IntRangeType(RangeType):
 
     def __init__(self, *args, **kwargs):
         super(IntRangeType, self).__init__(*args, **kwargs)
+        self.interval_class = intervals.IntInterval
+
+
+class Int8RangeType(RangeType):
+    """
+    Int8RangeType provides way for saving ranges of 8-byte integers into
+    database. On PostgreSQL this type maps to native INT8RANGE type while on
+    other drivers this maps to simple string column.
+
+    Example::
+
+
+        from sqlalchemy_utils import IntRangeType
+
+
+        class Event(Base):
+            __tablename__ = 'user'
+            id = sa.Column(sa.Integer, autoincrement=True)
+            name = sa.Column(sa.Unicode(255))
+            estimated_number_of_persons = sa.Column(Int8RangeType)
+
+
+        party = Event(name=u'party')
+
+        # we estimate the party to contain minium of 10 persons and at max
+        # 100 persons
+        party.estimated_number_of_persons = [10, 100]
+
+        print party.estimated_number_of_persons
+        # '10-100'
+
+
+    Int8RangeType returns the values as IntInterval objects. These objects
+    support many arithmetic operators::
+
+
+        meeting = Event(name=u'meeting')
+
+        meeting.estimated_number_of_persons = [20, 40]
+
+        total = (
+            meeting.estimated_number_of_persons +
+            party.estimated_number_of_persons
+        )
+        print total
+        # '30-140'
+    """
+    impl = INT8RANGE
+    comparator_factory = IntRangeComparator
+
+    def __init__(self, *args, **kwargs):
+        super(Int8RangeType, self).__init__(*args, **kwargs)
         self.interval_class = intervals.IntInterval
 
 
