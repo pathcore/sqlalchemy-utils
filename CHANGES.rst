@@ -3,6 +3,11 @@ Changelog
 
 Here you can see the full list of changes between each SQLAlchemy-Utils release.
 
+0.42.1 (2025-12-12)
+^^^^^^^^^^^^^^^^^^^
+
+- Fix ``AttributeError`` with Sequence defaults in ``instant_defaults_listener`` (#793)
+
 0.42.0 (2025-08-30)
 ^^^^^^^^^^^^^^^^^^^
 
