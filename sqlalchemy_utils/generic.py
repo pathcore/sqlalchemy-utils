@@ -12,6 +12,7 @@ from .functions import identity
 from .functions.orm import _get_class_registry
 
 BaseClass = object
+
 if tuple(map(int, sa.__version__.split("."))) >= (2, 1, 0):
     BaseClass = attributes._ScalarAttributeImpl
 else:
@@ -196,7 +197,12 @@ class GenericRelationshipProperty(MapperProperty):
             return self.property._discriminator_col.in_(class_names)
 
     def instrument_class(self, mapper):
-        attributes.register_attribute(
+        register = None
+        if tuple(map(int, sa.__version__.split("."))) >= (2, 1, 0):
+            register = attributes._register_attribute
+        else:
+            register = attributes.register_attribute
+        register(
             mapper.class_,
             self.key,
             comparator=self.Comparator(self, mapper),
